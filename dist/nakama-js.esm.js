@@ -1662,7 +1662,7 @@ var createFromCanvasToken = function (canvasToken) {
         throw 'jwt is not valid.';
     }
     var decoded = JSON.parse(atob(parts[1]));
-    return new Session(canvasToken, Math.floor(parseInt(decoded['iat'])), Math.floor(parseInt(decoded['exp'])), decoded['sub'], decoded['sub'], {});
+    return new Session(canvasToken, Math.floor(parseInt(decoded['iat'])), Math.floor(parseInt(decoded['exp'])), decoded['sub'], decoded['sub'], decoded['vrs']);
 };
 var AuthMode;
 (function (AuthMode) {
