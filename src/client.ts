@@ -65,7 +65,7 @@ const createFromCanvasToken = (canvasToken:string) => {
     throw 'jwt is not valid.';
   }
   const decoded = JSON.parse(atob(parts[1]));
-  return new Session(canvasToken, Math.floor(parseInt(decoded['iat'])), Math.floor(parseInt(decoded['exp'])), decoded['sub'], decoded['sub'], {});
+  return new Session(canvasToken, Math.floor(parseInt(decoded['iat'])), Math.floor(parseInt(decoded['exp'])), decoded['sub'], decoded['sub'], decoded['vrs']);
 };
 
 /** Send a custom ID to the server. Used with authenticate. */
