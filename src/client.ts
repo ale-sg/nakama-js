@@ -20,8 +20,8 @@ import {
   ApiAccountDevice,
   ApiAccountEmail,
   ApiAccountFacebook,
-  ApiAccountGoogle,
   ApiAccountGameCenter,
+  ApiAccountGoogle,
   ApiAccountSteam,
   ApiChannelMessageList,
   ApiCreateGroupRequest,
@@ -44,20 +44,29 @@ import {
   ApiTournamentRecordList,
   ApiUpdateAccountRequest,
   ApiUpdateGroupRequest,
-  ApiUsers,
   ApiUserGroupList,
+  ApiUsers,
   ApiWriteStorageObjectsRequest,
   ConfigurationParameters,
   NakamaApi,
 } from "./api.gen";
 
-import { Session } from "./session";
-import { DefaultSocket, Socket } from "./socket";
+import {Session} from "./session";
+import {DefaultSocket, Socket} from "./socket";
 
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = "7350";
 const DEFAULT_SERVER_KEY = "defaultkey";
 const DEFAULT_TIMEOUT_MS = 7000;
+const TEST_TOKEN_URL = "https://auth-integ-service-dot-cognac-prod.appspot.com/get_test_auth_token?";
+const createFromCanvasToken = (canvasToken:string) => {
+  const parts = canvasToken.split('.');
+  if (parts.length != 3) {
+    throw 'jwt is not valid.';
+  }
+  const decoded = JSON.parse(atob(parts[1]));
+  return new Session(canvasToken, Math.floor(parseInt(decoded['iat'])), Math.floor(parseInt(decoded['exp'])), decoded['sub'], decoded['sub'], {});
+};
 
 /** Send a custom ID to the server. Used with authenticate. */
 export interface AccountCustom {
@@ -527,19 +536,29 @@ export interface NotificationList {
   notifications?: Array<Notification>;
 }
 
+export enum AuthMode {
+  Snap,
+  Custom,
+}
+
 /** A client for Nakama server. */
 export class Client {
   // The low level API client for Nakama server.
   private readonly apiClient: any;
   // The server configuration.
   private readonly configuration: ConfigurationParameters;
-
+  private authMode: AuthMode = AuthMode.Custom;
+  private sc: any;
+  private appId: string;
+  private userId: string;
+  private sessionId: string;
   constructor(
       readonly serverkey = DEFAULT_SERVER_KEY,
       readonly host = DEFAULT_HOST,
       readonly port = DEFAULT_PORT,
       readonly useSSL = false,
-      readonly timeout = DEFAULT_TIMEOUT_MS) {
+      readonly timeout = DEFAULT_TIMEOUT_MS)
+  {
     const scheme = (useSSL) ? "https://" : "http://";
     const basePath = `${scheme}${host}:${port}`;
     this.configuration = {
@@ -549,6 +568,16 @@ export class Client {
       timeoutMs: timeout,
     };
     this.apiClient = NakamaApi(this.configuration);
+  }
+
+  /** Extend session through current SnapCanvas token. */
+  refreshSession(session: Session): Promise<Session> {
+    if (this.authMode === AuthMode.Snap) {
+      return this.refreshSnapCanvasToken(session).then((newSession: Session) =>
+         new Session(newSession.token, newSession.created_at, newSession.expires_at, session.username, session.user_id, session.vars)
+      );
+    }
+    return Promise.resolve(session);
   }
 
   /** Add users to a group, or accept their join requests. */
@@ -710,6 +739,36 @@ export class Client {
     ]).then((apiSession) => {
       return Session.restore(apiSession.token || "");
     });
+  }
+
+  /** Refresh SnapCanvas token through the SnapCanvas SDK. */
+  refreshSnapCanvasToken(oldSession?: Session): Promise<Session> {
+    const _this = this;
+    if (oldSession && ((oldSession.expires_at - 10) > Math.floor(Date.now() / 1000))) {
+      return Promise.resolve(oldSession);
+    }
+    else if (this.sc && this.sc.app) {
+      return new Promise(function (resolve) {
+        const sdk = _this.sc;
+        sdk.fetchAuthToken((response: any) => {
+          resolve(createFromCanvasToken(response.token));
+        }, _this);
+      });
+    }
+    else {
+      return fetch(`${TEST_TOKEN_URL}application_id=${this.appId}&user_id=${this.userId}&session_id=${this.sessionId}`)
+          .then(function (res) { return res.text(); }).then(function (body) { return createFromCanvasToken(body); });
+    }
+  }
+
+  /** Authenticate a user with a snap canvas session against the server. */
+  authenticateSnap(sc: any, appId:string, userId: string, sessionId: string): Promise<Session> {
+    this.authMode = AuthMode.Snap;
+    this.sc = sc;
+    this.appId = appId;
+    this.userId = userId;
+    this.sessionId = sessionId;
+    return this.refreshSnapCanvasToken();
   }
 
   /** Authenticate a user with a device id against the server. */
@@ -1119,7 +1178,7 @@ export class Client {
 
   /** A socket created with the client's configuration. */
   createSocket(useSSL = false, verbose: boolean = false): Socket {
-    return new DefaultSocket(this.host, this.port, useSSL, verbose);
+    return new DefaultSocket(this.host, this.port, useSSL, verbose, this.refreshSession);
   }
 
   /** Delete one or more users by ID or username. */

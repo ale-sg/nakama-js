@@ -309,7 +309,9 @@ export class DefaultSocket implements Socket {
       readonly host: string,
       readonly port: string,
       readonly useSSL: boolean = false,
-      public verbose: boolean = false) {
+      public verbose: boolean = false,
+      private sessionRefresher: (session:Session) => Promise<Session> = (s:Session) => Promise.resolve(s)) {
+    this.sessionRefresher = sessionRefresher;
     this.cIds = {};
     this.nextCid = 1;
   }
@@ -325,96 +327,99 @@ export class DefaultSocket implements Socket {
       return Promise.resolve(session);
     }
 
-    const scheme = (this.useSSL) ? "wss://" : "ws://";
-    const url = `${scheme}${this.host}:${this.port}/ws?lang=en&status=${encodeURIComponent(createStatus.toString())}&token=${encodeURIComponent(session.token)}`;
-    const socket = new WebSocket(url);
-    this.socket = socket;
+    return this.sessionRefresher(session).then((newSession: Session) => {
+      const scheme = (this.useSSL) ? "wss://" : "ws://";
+      const url = `${scheme}${this.host}:${this.port}/ws?lang=en&status=${encodeURIComponent(createStatus.toString())}&token=${encodeURIComponent(newSession.token)}`;
+      const socket = new WebSocket(url);
+      this.socket = socket;
 
-    socket.onclose = (evt: Event) => {
-      this.ondisconnect(evt);
-      this.socket = undefined;
-    }
-
-    socket.onerror = (evt: Event) => {
-      this.onerror(evt);
-    }
-
-    socket.onmessage = (evt: MessageEvent) => {
-      const message = JSON.parse(evt.data);
-      if (this.verbose && window && window.console) {
-        console.log("Response: %o", message);
-      }
-
-      // Inbound message from server.
-      if (message.cid == undefined) {
-        if (message.notifications) {
-          message.notifications.notifications.forEach((n: ApiNotification) => {
-            const notification: Notification = {
-              code: n.code,
-              create_time: n.create_time,
-              id: n.id,
-              persistent: n.persistent,
-              sender_id: n.sender_id,
-              subject: n.subject,
-              content: n.content ? JSON.parse(n.content) : undefined,
-            };
-            this.onnotification(notification);
-          });
-        } else if (message.match_data) {
-          message.match_data.data = message.match_data.data != null ? JSON.parse(b64DecodeUnicode(message.match_data.data)) : null;
-          message.match_data.op_code = parseInt(message.match_data.op_code);
-          this.onmatchdata(message.match_data);
-        } else if (message.match_presence_event) {
-          this.onmatchpresence(<MatchPresenceEvent>message.match_presence_event);
-        } else if (message.matchmaker_matched) {
-          this.onmatchmakermatched(<MatchmakerMatched>message.matchmaker_matched);
-        } else if (message.status_presence_event) {
-          this.onstatuspresence(<StatusPresenceEvent>message.status_presence_event);
-        } else if (message.stream_presence_event) {
-          this.onstreampresence(<StreamPresenceEvent>message.stream_presence_event);
-        } else if (message.stream_data) {
-          this.onstreamdata(<StreamData>message.stream_data);
-        } else if (message.channel_message) {
-          message.channel_message.content = JSON.parse(message.channel_message.content);
-          this.onchannelmessage(<ChannelMessage>message.channel_message);
-        } else if (message.channel_presence_event) {
-          this.onchannelpresence(<ChannelPresenceEvent>message.channel_presence_event);
-        } else {
-          if (this.verbose && window && window.console) {
-            console.log("Unrecognized message received: %o", message);
-          }
-        }
-      } else {
-        const executor = this.cIds[message.cid];
-        if (!executor) {
-          if (this.verbose && window && window.console) {
-            console.error("No promise executor for message: %o", message);
-          }
-          return;
-        }
-        delete this.cIds[message.cid];
-
-        if (message.error) {
-          executor.reject(<SocketError>message.error);
-        } else {
-          executor.resolve(message);
-        }
-      }
-    }
-
-    return new Promise((resolve, reject) => {
-      socket.onopen = (evt: Event) => {
-        if (this.verbose && window && window.console) {
-          console.log(evt);
-        }
-        resolve(session);
-      }
-      socket.onerror = (evt: Event) => {
-        reject(evt);
-        socket.close();
+      socket.onclose = (evt: Event) => {
+        this.ondisconnect(evt);
         this.socket = undefined;
-      }
+      };
+
+      socket.onerror = (evt: Event) => {
+        this.onerror(evt);
+      };
+
+      socket.onmessage = (evt: MessageEvent) => {
+        const message = JSON.parse(evt.data);
+        if (this.verbose && window && window.console) {
+          console.log("Response: %o", message);
+        }
+
+        // Inbound message from server.
+        if (message.cid == undefined) {
+          if (message.notifications) {
+            message.notifications.notifications.forEach((n: ApiNotification) => {
+              const notification: Notification = {
+                code: n.code,
+                create_time: n.create_time,
+                id: n.id,
+                persistent: n.persistent,
+                sender_id: n.sender_id,
+                subject: n.subject,
+                content: n.content ? JSON.parse(n.content) : undefined,
+              };
+              this.onnotification(notification);
+            });
+          } else if (message.match_data) {
+            message.match_data.data = message.match_data.data != null ? JSON.parse(b64DecodeUnicode(message.match_data.data)) : null;
+            message.match_data.op_code = parseInt(message.match_data.op_code);
+            this.onmatchdata(message.match_data);
+          } else if (message.match_presence_event) {
+            this.onmatchpresence(<MatchPresenceEvent>message.match_presence_event);
+          } else if (message.matchmaker_matched) {
+            this.onmatchmakermatched(<MatchmakerMatched>message.matchmaker_matched);
+          } else if (message.status_presence_event) {
+            this.onstatuspresence(<StatusPresenceEvent>message.status_presence_event);
+          } else if (message.stream_presence_event) {
+            this.onstreampresence(<StreamPresenceEvent>message.stream_presence_event);
+          } else if (message.stream_data) {
+            this.onstreamdata(<StreamData>message.stream_data);
+          } else if (message.channel_message) {
+            message.channel_message.content = JSON.parse(message.channel_message.content);
+            this.onchannelmessage(<ChannelMessage>message.channel_message);
+          } else if (message.channel_presence_event) {
+            this.onchannelpresence(<ChannelPresenceEvent>message.channel_presence_event);
+          } else {
+            if (this.verbose && window && window.console) {
+              console.log("Unrecognized message received: %o", message);
+            }
+          }
+        } else {
+          const executor = this.cIds[message.cid];
+          if (!executor) {
+            if (this.verbose && window && window.console) {
+              console.error("No promise executor for message: %o", message);
+            }
+            return;
+          }
+          delete this.cIds[message.cid];
+
+          if (message.error) {
+            executor.reject(<SocketError>message.error);
+          } else {
+            executor.resolve(message);
+          }
+        }
+      };
+
+      return new Promise((resolve, reject) => {
+        socket.onopen = (evt: Event) => {
+          if (this.verbose && window && window.console) {
+            console.log(evt);
+          }
+          resolve(newSession);
+        };
+        socket.onerror = (evt: Event) => {
+          reject(evt);
+          socket.close();
+          this.socket = undefined;
+        }
+      });
     });
+
   }
 
   disconnect(fireDisconnectEvent: boolean = true) {

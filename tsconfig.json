@@ -23,6 +23,7 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "moduleResolution": "node",
+    "strictPropertyInitialization": false,
     "baseUrl": "./"
   },
   "include": [

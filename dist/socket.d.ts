@@ -203,10 +203,11 @@ export declare class DefaultSocket implements Socket {
     readonly port: string;
     readonly useSSL: boolean;
     verbose: boolean;
+    private sessionRefresher;
     private socket?;
     private readonly cIds;
     private nextCid;
-    constructor(host: string, port: string, useSSL?: boolean, verbose?: boolean);
+    constructor(host: string, port: string, useSSL?: boolean, verbose?: boolean, sessionRefresher?: (session: Session) => Promise<Session>);
     generatecid(): string;
     connect(session: Session, createStatus?: boolean): Promise<Session>;
     disconnect(fireDisconnectEvent?: boolean): void;

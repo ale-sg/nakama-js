@@ -1435,13 +1435,16 @@ function b64DecodeUnicode(str) {
 }
 
 var DefaultSocket = (function () {
-    function DefaultSocket(host, port, useSSL, verbose) {
+    function DefaultSocket(host, port, useSSL, verbose, sessionRefresher) {
         if (useSSL === void 0) { useSSL = false; }
         if (verbose === void 0) { verbose = false; }
+        if (sessionRefresher === void 0) { sessionRefresher = function (s) { return Promise.resolve(s); }; }
         this.host = host;
         this.port = port;
         this.useSSL = useSSL;
         this.verbose = verbose;
+        this.sessionRefresher = sessionRefresher;
+        this.sessionRefresher = sessionRefresher;
         this.cIds = {};
         this.nextCid = 1;
     }
@@ -1456,99 +1459,101 @@ var DefaultSocket = (function () {
         if (this.socket != undefined) {
             return Promise.resolve(session);
         }
-        var scheme = (this.useSSL) ? "wss://" : "ws://";
-        var url = "" + scheme + this.host + ":" + this.port + "/ws?lang=en&status=" + encodeURIComponent(createStatus.toString()) + "&token=" + encodeURIComponent(session.token);
-        var socket = new WebSocket(url);
-        this.socket = socket;
-        socket.onclose = function (evt) {
-            _this.ondisconnect(evt);
-            _this.socket = undefined;
-        };
-        socket.onerror = function (evt) {
-            _this.onerror(evt);
-        };
-        socket.onmessage = function (evt) {
-            var message = JSON.parse(evt.data);
-            if (_this.verbose && window && window.console) {
-                console.log("Response: %o", message);
-            }
-            if (message.cid == undefined) {
-                if (message.notifications) {
-                    message.notifications.notifications.forEach(function (n) {
-                        var notification = {
-                            code: n.code,
-                            create_time: n.create_time,
-                            id: n.id,
-                            persistent: n.persistent,
-                            sender_id: n.sender_id,
-                            subject: n.subject,
-                            content: n.content ? JSON.parse(n.content) : undefined,
-                        };
-                        _this.onnotification(notification);
-                    });
-                }
-                else if (message.match_data) {
-                    message.match_data.data = message.match_data.data != null ? JSON.parse(b64DecodeUnicode(message.match_data.data)) : null;
-                    message.match_data.op_code = parseInt(message.match_data.op_code);
-                    _this.onmatchdata(message.match_data);
-                }
-                else if (message.match_presence_event) {
-                    _this.onmatchpresence(message.match_presence_event);
-                }
-                else if (message.matchmaker_matched) {
-                    _this.onmatchmakermatched(message.matchmaker_matched);
-                }
-                else if (message.status_presence_event) {
-                    _this.onstatuspresence(message.status_presence_event);
-                }
-                else if (message.stream_presence_event) {
-                    _this.onstreampresence(message.stream_presence_event);
-                }
-                else if (message.stream_data) {
-                    _this.onstreamdata(message.stream_data);
-                }
-                else if (message.channel_message) {
-                    message.channel_message.content = JSON.parse(message.channel_message.content);
-                    _this.onchannelmessage(message.channel_message);
-                }
-                else if (message.channel_presence_event) {
-                    _this.onchannelpresence(message.channel_presence_event);
-                }
-                else {
-                    if (_this.verbose && window && window.console) {
-                        console.log("Unrecognized message received: %o", message);
-                    }
-                }
-            }
-            else {
-                var executor = _this.cIds[message.cid];
-                if (!executor) {
-                    if (_this.verbose && window && window.console) {
-                        console.error("No promise executor for message: %o", message);
-                    }
-                    return;
-                }
-                delete _this.cIds[message.cid];
-                if (message.error) {
-                    executor.reject(message.error);
-                }
-                else {
-                    executor.resolve(message);
-                }
-            }
-        };
-        return new Promise(function (resolve, reject) {
-            socket.onopen = function (evt) {
-                if (_this.verbose && window && window.console) {
-                    console.log(evt);
-                }
-                resolve(session);
-            };
-            socket.onerror = function (evt) {
-                reject(evt);
-                socket.close();
+        return this.sessionRefresher(session).then(function (newSession) {
+            var scheme = (_this.useSSL) ? "wss://" : "ws://";
+            var url = "" + scheme + _this.host + ":" + _this.port + "/ws?lang=en&status=" + encodeURIComponent(createStatus.toString()) + "&token=" + encodeURIComponent(newSession.token);
+            var socket = new WebSocket(url);
+            _this.socket = socket;
+            socket.onclose = function (evt) {
+                _this.ondisconnect(evt);
                 _this.socket = undefined;
             };
+            socket.onerror = function (evt) {
+                _this.onerror(evt);
+            };
+            socket.onmessage = function (evt) {
+                var message = JSON.parse(evt.data);
+                if (_this.verbose && window && window.console) {
+                    console.log("Response: %o", message);
+                }
+                if (message.cid == undefined) {
+                    if (message.notifications) {
+                        message.notifications.notifications.forEach(function (n) {
+                            var notification = {
+                                code: n.code,
+                                create_time: n.create_time,
+                                id: n.id,
+                                persistent: n.persistent,
+                                sender_id: n.sender_id,
+                                subject: n.subject,
+                                content: n.content ? JSON.parse(n.content) : undefined,
+                            };
+                            _this.onnotification(notification);
+                        });
+                    }
+                    else if (message.match_data) {
+                        message.match_data.data = message.match_data.data != null ? JSON.parse(b64DecodeUnicode(message.match_data.data)) : null;
+                        message.match_data.op_code = parseInt(message.match_data.op_code);
+                        _this.onmatchdata(message.match_data);
+                    }
+                    else if (message.match_presence_event) {
+                        _this.onmatchpresence(message.match_presence_event);
+                    }
+                    else if (message.matchmaker_matched) {
+                        _this.onmatchmakermatched(message.matchmaker_matched);
+                    }
+                    else if (message.status_presence_event) {
+                        _this.onstatuspresence(message.status_presence_event);
+                    }
+                    else if (message.stream_presence_event) {
+                        _this.onstreampresence(message.stream_presence_event);
+                    }
+                    else if (message.stream_data) {
+                        _this.onstreamdata(message.stream_data);
+                    }
+                    else if (message.channel_message) {
+                        message.channel_message.content = JSON.parse(message.channel_message.content);
+                        _this.onchannelmessage(message.channel_message);
+                    }
+                    else if (message.channel_presence_event) {
+                        _this.onchannelpresence(message.channel_presence_event);
+                    }
+                    else {
+                        if (_this.verbose && window && window.console) {
+                            console.log("Unrecognized message received: %o", message);
+                        }
+                    }
+                }
+                else {
+                    var executor = _this.cIds[message.cid];
+                    if (!executor) {
+                        if (_this.verbose && window && window.console) {
+                            console.error("No promise executor for message: %o", message);
+                        }
+                        return;
+                    }
+                    delete _this.cIds[message.cid];
+                    if (message.error) {
+                        executor.reject(message.error);
+                    }
+                    else {
+                        executor.resolve(message);
+                    }
+                }
+            };
+            return new Promise(function (resolve, reject) {
+                socket.onopen = function (evt) {
+                    if (_this.verbose && window && window.console) {
+                        console.log(evt);
+                    }
+                    resolve(newSession);
+                };
+                socket.onerror = function (evt) {
+                    reject(evt);
+                    socket.close();
+                    _this.socket = undefined;
+                };
+            });
         });
     };
     DefaultSocket.prototype.disconnect = function (fireDisconnectEvent) {
@@ -1654,6 +1659,19 @@ var DEFAULT_HOST = "127.0.0.1";
 var DEFAULT_PORT = "7350";
 var DEFAULT_SERVER_KEY = "defaultkey";
 var DEFAULT_TIMEOUT_MS = 7000;
+var TEST_TOKEN_URL = "https://auth-integ-service-dot-cognac-prod.appspot.com/get_test_auth_token?";
+var createFromCanvasToken = function (canvasToken) {
+    var parts = canvasToken.split('.');
+    if (parts.length != 3) {
+        throw 'jwt is not valid.';
+    }
+    var decoded = JSON.parse(atob(parts[1]));
+    return new Session(canvasToken, Math.floor(parseInt(decoded['iat'])), Math.floor(parseInt(decoded['exp'])), decoded['sub'], decoded['sub'], {});
+};
+(function (AuthMode) {
+    AuthMode[AuthMode["Snap"] = 0] = "Snap";
+    AuthMode[AuthMode["Custom"] = 1] = "Custom";
+})(exports.AuthMode || (exports.AuthMode = {}));
 var Client = (function () {
     function Client(serverkey, host, port, useSSL, timeout) {
         if (serverkey === void 0) { serverkey = DEFAULT_SERVER_KEY; }
@@ -1666,6 +1684,7 @@ var Client = (function () {
         this.port = port;
         this.useSSL = useSSL;
         this.timeout = timeout;
+        this.authMode = exports.AuthMode.Custom;
         var scheme = (useSSL) ? "https://" : "http://";
         var basePath = "" + scheme + host + ":" + port;
         this.configuration = {
@@ -1676,8 +1695,16 @@ var Client = (function () {
         };
         this.apiClient = NakamaApi(this.configuration);
     }
+    Client.prototype.refreshSession = function (session) {
+        if (this.authMode === exports.AuthMode.Snap) {
+            return this.refreshSnapCanvasToken(session).then(function (newSession) {
+                return new Session(newSession.token, newSession.created_at, newSession.expires_at, session.username, session.user_id, session.vars);
+            });
+        }
+        return Promise.resolve(session);
+    };
     Client.prototype.addGroupUsers = function (session, groupId, ids) {
-        var _this = this;
+        var _this_1 = this;
         this.configuration.bearerToken = (session && session.token);
         var urlPath = "/v2/group/" + groupId + "/add";
         var queryParams = {
@@ -1719,14 +1746,14 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (response) {
             return Promise.resolve(response != undefined);
         });
     };
     Client.prototype.addFriends = function (session, ids, usernames) {
-        var _this = this;
+        var _this_1 = this;
         this.configuration.bearerToken = (session && session.token);
         var urlPath = "/v2/friend";
         var queryParams = {
@@ -1769,14 +1796,14 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (response) {
             return Promise.resolve(response != undefined);
         });
     };
     Client.prototype.authenticateCustom = function (request) {
-        var _this = this;
+        var _this_1 = this;
         var urlPath = "/v2/account/authenticate/custom";
         var queryParams = {
             username: request.username,
@@ -1819,14 +1846,40 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (apiSession) {
             return Session.restore(apiSession.token || "");
         });
     };
-    Client.prototype.authenticateDevice = function (request) {
+    Client.prototype.refreshSnapCanvasToken = function (oldSession) {
         var _this = this;
+        if (oldSession && ((oldSession.expires_at - 10) > Math.floor(Date.now() / 1000))) {
+            return Promise.resolve(oldSession);
+        }
+        else if (this.sc && this.sc.app) {
+            return new Promise(function (resolve) {
+                var sdk = _this.sc;
+                sdk.fetchAuthToken(function (response) {
+                    resolve(createFromCanvasToken(response.token));
+                }, _this);
+            });
+        }
+        else {
+            return fetch(TEST_TOKEN_URL + "application_id=" + this.appId + "&user_id=" + this.userId + "&session_id=" + this.sessionId)
+                .then(function (res) { return res.text(); }).then(function (body) { return createFromCanvasToken(body); });
+        }
+    };
+    Client.prototype.authenticateSnap = function (sc, appId, userId, sessionId) {
+        this.authMode = exports.AuthMode.Snap;
+        this.sc = sc;
+        this.appId = appId;
+        this.userId = userId;
+        this.sessionId = sessionId;
+        return this.refreshSnapCanvasToken();
+    };
+    Client.prototype.authenticateDevice = function (request) {
+        var _this_1 = this;
         var urlPath = "/v2/account/authenticate/device";
         var queryParams = {
             username: request.username,
@@ -1869,14 +1922,14 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (apiSession) {
             return Session.restore(apiSession.token || "");
         });
     };
     Client.prototype.authenticateEmail = function (request) {
-        var _this = this;
+        var _this_1 = this;
         var urlPath = "/v2/account/authenticate/email";
         var queryParams = {
             username: request.username,
@@ -1920,14 +1973,14 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (apiSession) {
             return Session.restore(apiSession.token || "");
         });
     };
     Client.prototype.authenticateFacebook = function (request) {
-        var _this = this;
+        var _this_1 = this;
         var urlPath = "/v2/account/authenticate/facebook";
         var queryParams = {
             username: request.username,
@@ -1970,14 +2023,14 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (apiSession) {
             return Session.restore(apiSession.token || "");
         });
     };
     Client.prototype.authenticateGoogle = function (request) {
-        var _this = this;
+        var _this_1 = this;
         var urlPath = "/v2/account/authenticate/google";
         var queryParams = {
             username: request.username,
@@ -2020,14 +2073,14 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (apiSession) {
             return Session.restore(apiSession.token || "");
         });
     };
     Client.prototype.authenticateGameCenter = function (request) {
-        var _this = this;
+        var _this_1 = this;
         var urlPath = "/v2/account/authenticate/gamecenter";
         var queryParams = {
             username: request.username,
@@ -2075,14 +2128,14 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (apiSession) {
             return Session.restore(apiSession.token || "");
         });
     };
     Client.prototype.authenticateSteam = function (request) {
-        var _this = this;
+        var _this_1 = this;
         var urlPath = "/v2/account/authenticate/steam";
         var queryParams = {
             username: request.username,
@@ -2125,14 +2178,14 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (apiSession) {
             return Session.restore(apiSession.token || "");
         });
     };
     Client.prototype.blockFriends = function (session, ids, usernames) {
-        var _this = this;
+        var _this_1 = this;
         this.configuration.bearerToken = (session && session.token);
         var urlPath = "/v2/friend/block";
         var queryParams = {
@@ -2175,7 +2228,7 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (response) {
             return Promise.resolve(response != undefined);
@@ -2203,10 +2256,10 @@ var Client = (function () {
     Client.prototype.createSocket = function (useSSL, verbose) {
         if (useSSL === void 0) { useSSL = false; }
         if (verbose === void 0) { verbose = false; }
-        return new DefaultSocket(this.host, this.port, useSSL, verbose);
+        return new DefaultSocket(this.host, this.port, useSSL, verbose, this.refreshSession);
     };
     Client.prototype.deleteFriends = function (session, ids, usernames) {
-        var _this = this;
+        var _this_1 = this;
         this.configuration.bearerToken = (session && session.token);
         var urlPath = "/v2/friend";
         var queryParams = {
@@ -2249,7 +2302,7 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (response) {
             return Promise.resolve(response != undefined);
@@ -2262,7 +2315,7 @@ var Client = (function () {
         });
     };
     Client.prototype.deleteNotifications = function (session, ids) {
-        var _this = this;
+        var _this_1 = this;
         this.configuration.bearerToken = (session && session.token);
         var urlPath = "/v2/notification";
         var queryParams = {
@@ -2304,7 +2357,7 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (response) {
             return Promise.resolve(response != undefined);
@@ -2377,7 +2430,7 @@ var Client = (function () {
         });
     };
     Client.prototype.kickGroupUsers = function (session, groupId, ids) {
-        var _this = this;
+        var _this_1 = this;
         this.configuration.bearerToken = (session && session.token);
         var urlPath = "/v2/group/" + groupId + "/kick";
         var queryParams = {
@@ -2419,7 +2472,7 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (response) {
             return Promise.resolve(response != undefined);
@@ -2909,7 +2962,7 @@ var Client = (function () {
         });
     };
     Client.prototype.promoteGroupUsers = function (session, groupId, ids) {
-        var _this = this;
+        var _this_1 = this;
         this.configuration.bearerToken = (session && session.token);
         var urlPath = "/v2/group/" + groupId + "/promote";
         var queryParams = {
@@ -2951,7 +3004,7 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (response) {
             return Promise.resolve(response != undefined);
@@ -2990,7 +3043,7 @@ var Client = (function () {
         });
     };
     Client.prototype.rpcGet = function (id, session, httpKey, input) {
-        var _this = this;
+        var _this_1 = this;
         if (!httpKey || httpKey == "") {
             this.configuration.bearerToken = (session && session.token);
         }
@@ -3000,13 +3053,13 @@ var Client = (function () {
         }
         return this.apiClient.rpcFunc2(id, input && JSON.stringify(input) || "", httpKey)
             .then(function (response) {
-            _this.configuration.username = _this.serverkey;
+            _this_1.configuration.username = _this_1.serverkey;
             return Promise.resolve({
                 id: response.id,
                 payload: (!response.payload) ? undefined : JSON.parse(response.payload)
             });
         }).catch(function (err) {
-            _this.configuration.username = _this.serverkey;
+            _this_1.configuration.username = _this_1.serverkey;
             throw err;
         });
     };

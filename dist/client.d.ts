@@ -1,4 +1,4 @@
-import { ApiAccount, ApiAccountCustom, ApiAccountDevice, ApiAccountEmail, ApiAccountFacebook, ApiAccountGoogle, ApiAccountGameCenter, ApiAccountSteam, ApiCreateGroupRequest, ApiDeleteStorageObjectsRequest, ApiEvent, ApiMatchList, ApiReadStorageObjectsRequest, ApiStorageObjectAcks, ApiUpdateAccountRequest, ApiUpdateGroupRequest } from "./api.gen";
+import { ApiAccount, ApiAccountCustom, ApiAccountDevice, ApiAccountEmail, ApiAccountFacebook, ApiAccountGameCenter, ApiAccountGoogle, ApiAccountSteam, ApiCreateGroupRequest, ApiDeleteStorageObjectsRequest, ApiEvent, ApiMatchList, ApiReadStorageObjectsRequest, ApiStorageObjectAcks, ApiUpdateAccountRequest, ApiUpdateGroupRequest } from "./api.gen";
 import { Session } from "./session";
 import { Socket } from "./socket";
 export interface AccountCustom {
@@ -249,6 +249,10 @@ export interface NotificationList {
     cacheable_cursor?: string;
     notifications?: Array<Notification>;
 }
+export declare enum AuthMode {
+    Snap = 0,
+    Custom = 1
+}
 export declare class Client {
     readonly serverkey: string;
     readonly host: string;
@@ -257,10 +261,18 @@ export declare class Client {
     readonly timeout: number;
     private readonly apiClient;
     private readonly configuration;
+    private authMode;
+    private sc;
+    private appId;
+    private userId;
+    private sessionId;
     constructor(serverkey?: string, host?: string, port?: string, useSSL?: boolean, timeout?: number);
+    refreshSession(session: Session): Promise<Session>;
     addGroupUsers(session: Session, groupId: string, ids?: Array<string>): Promise<boolean>;
     addFriends(session: Session, ids?: Array<string>, usernames?: Array<string>): Promise<boolean>;
     authenticateCustom(request: AccountCustom): Promise<Session>;
+    refreshSnapCanvasToken(oldSession?: Session): Promise<Session>;
+    authenticateSnap(sc: any, appId: string, userId: string, sessionId: string): Promise<Session>;
     authenticateDevice(request: AccountDevice): Promise<Session>;
     authenticateEmail(request: AccountEmail): Promise<Session>;
     authenticateFacebook(request: AccountFacebook): Promise<Session>;
