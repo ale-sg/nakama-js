@@ -9,6 +9,16 @@ export interface AccountCustom {
         [key: string]: string;
     };
 }
+export interface AccountSnap {
+    token: string;
+    fetchAuthToken: () => Promise<string>;
+    appId: string;
+    sessionId: string;
+    userId: string;
+    vars: {
+        [key: string]: string;
+    };
+}
 export interface AccountDevice {
     username?: string;
     create?: boolean;
@@ -262,17 +272,18 @@ export declare class Client {
     private readonly apiClient;
     private readonly configuration;
     private authMode;
-    private sc;
     private appId;
     private userId;
     private sessionId;
+    private vars;
+    private fetchAuthToken;
     constructor(serverkey?: string, host?: string, port?: string, useSSL?: boolean, timeout?: number);
     refreshSession(session: Session): Promise<Session>;
     addGroupUsers(session: Session, groupId: string, ids?: Array<string>): Promise<boolean>;
     addFriends(session: Session, ids?: Array<string>, usernames?: Array<string>): Promise<boolean>;
     authenticateCustom(request: AccountCustom): Promise<Session>;
     refreshSnapCanvasToken(oldSession?: Session): Promise<Session>;
-    authenticateSnap(sc: any, appId: string, userId: string, sessionId: string): Promise<Session>;
+    authenticateSnap(request: AccountSnap): Promise<Session>;
     authenticateDevice(request: AccountDevice): Promise<Session>;
     authenticateEmail(request: AccountEmail): Promise<Session>;
     authenticateFacebook(request: AccountFacebook): Promise<Session>;

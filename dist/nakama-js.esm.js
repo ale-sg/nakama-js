@@ -1656,13 +1656,13 @@ var DEFAULT_PORT = "7350";
 var DEFAULT_SERVER_KEY = "defaultkey";
 var DEFAULT_TIMEOUT_MS = 7000;
 var TEST_TOKEN_URL = "https://auth-integ-service-dot-cognac-prod.appspot.com/get_test_auth_token?";
-var createFromCanvasToken = function (canvasToken) {
+var createFromCanvasToken = function (canvasToken, vars) {
     var parts = canvasToken.split('.');
     if (parts.length != 3) {
         throw 'jwt is not valid.';
     }
     var decoded = JSON.parse(atob(parts[1]));
-    return new Session(canvasToken, Math.floor(parseInt(decoded['iat'])), Math.floor(parseInt(decoded['exp'])), decoded['sub'], decoded['sub'], decoded['vrs']);
+    return new Session(canvasToken, Math.floor(parseInt(decoded['iat'])), Math.floor(parseInt(decoded['exp'])), decoded['sub'], decoded['sub'], vars);
 };
 var AuthMode;
 (function (AuthMode) {
@@ -1701,7 +1701,7 @@ var Client = (function () {
         return Promise.resolve(session);
     };
     Client.prototype.addGroupUsers = function (session, groupId, ids) {
-        var _this_1 = this;
+        var _this = this;
         this.configuration.bearerToken = (session && session.token);
         var urlPath = "/v2/group/" + groupId + "/add";
         var queryParams = {
@@ -1743,14 +1743,14 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (response) {
             return Promise.resolve(response != undefined);
         });
     };
     Client.prototype.addFriends = function (session, ids, usernames) {
-        var _this_1 = this;
+        var _this = this;
         this.configuration.bearerToken = (session && session.token);
         var urlPath = "/v2/friend";
         var queryParams = {
@@ -1793,14 +1793,14 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (response) {
             return Promise.resolve(response != undefined);
         });
     };
     Client.prototype.authenticateCustom = function (request) {
-        var _this_1 = this;
+        var _this = this;
         var urlPath = "/v2/account/authenticate/custom";
         var queryParams = {
             username: request.username,
@@ -1843,7 +1843,7 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (apiSession) {
             return Session.restore(apiSession.token || "");
@@ -1854,29 +1854,32 @@ var Client = (function () {
         if (oldSession && ((oldSession.expires_at - 10) > Math.floor(Date.now() / 1000))) {
             return Promise.resolve(oldSession);
         }
-        else if (this.sc && this.sc.app) {
-            return new Promise(function (resolve) {
-                var sdk = _this.sc;
-                sdk.fetchAuthToken(function (response) {
-                    resolve(createFromCanvasToken(response.token));
-                }, _this);
+        else if (this.fetchAuthToken) {
+            return new Promise(function (resolve, reject) {
+                _this.fetchAuthToken()
+                    .then(function (token) { return resolve(createFromCanvasToken(token, _this.vars)); })
+                    .catch(reject);
             });
         }
         else {
             return fetch(TEST_TOKEN_URL + "application_id=" + this.appId + "&user_id=" + this.userId + "&session_id=" + this.sessionId)
-                .then(function (res) { return res.text(); }).then(function (body) { return createFromCanvasToken(body); });
+                .then(function (res) { return res.text(); })
+                .then(function (body) { return createFromCanvasToken(body, _this.vars); });
         }
     };
-    Client.prototype.authenticateSnap = function (sc, appId, userId, sessionId) {
+    Client.prototype.authenticateSnap = function (request) {
+        var token = request.token, fetchAuthToken = request.fetchAuthToken, appId = request.appId, userId = request.userId, sessionId = request.sessionId, vars = request.vars;
         this.authMode = AuthMode.Snap;
-        this.sc = sc;
+        this.fetchAuthToken = fetchAuthToken;
         this.appId = appId;
         this.userId = userId;
         this.sessionId = sessionId;
-        return this.refreshSnapCanvasToken();
+        this.vars = vars;
+        var session = createFromCanvasToken(token, vars);
+        return this.refreshSnapCanvasToken(session);
     };
     Client.prototype.authenticateDevice = function (request) {
-        var _this_1 = this;
+        var _this = this;
         var urlPath = "/v2/account/authenticate/device";
         var queryParams = {
             username: request.username,
@@ -1919,14 +1922,14 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (apiSession) {
             return Session.restore(apiSession.token || "");
         });
     };
     Client.prototype.authenticateEmail = function (request) {
-        var _this_1 = this;
+        var _this = this;
         var urlPath = "/v2/account/authenticate/email";
         var queryParams = {
             username: request.username,
@@ -1970,14 +1973,14 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (apiSession) {
             return Session.restore(apiSession.token || "");
         });
     };
     Client.prototype.authenticateFacebook = function (request) {
-        var _this_1 = this;
+        var _this = this;
         var urlPath = "/v2/account/authenticate/facebook";
         var queryParams = {
             username: request.username,
@@ -2020,14 +2023,14 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (apiSession) {
             return Session.restore(apiSession.token || "");
         });
     };
     Client.prototype.authenticateGoogle = function (request) {
-        var _this_1 = this;
+        var _this = this;
         var urlPath = "/v2/account/authenticate/google";
         var queryParams = {
             username: request.username,
@@ -2070,14 +2073,14 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (apiSession) {
             return Session.restore(apiSession.token || "");
         });
     };
     Client.prototype.authenticateGameCenter = function (request) {
-        var _this_1 = this;
+        var _this = this;
         var urlPath = "/v2/account/authenticate/gamecenter";
         var queryParams = {
             username: request.username,
@@ -2125,14 +2128,14 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (apiSession) {
             return Session.restore(apiSession.token || "");
         });
     };
     Client.prototype.authenticateSteam = function (request) {
-        var _this_1 = this;
+        var _this = this;
         var urlPath = "/v2/account/authenticate/steam";
         var queryParams = {
             username: request.username,
@@ -2175,14 +2178,14 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (apiSession) {
             return Session.restore(apiSession.token || "");
         });
     };
     Client.prototype.blockFriends = function (session, ids, usernames) {
-        var _this_1 = this;
+        var _this = this;
         this.configuration.bearerToken = (session && session.token);
         var urlPath = "/v2/friend/block";
         var queryParams = {
@@ -2225,7 +2228,7 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (response) {
             return Promise.resolve(response != undefined);
@@ -2256,7 +2259,7 @@ var Client = (function () {
         return new DefaultSocket(this.host, this.port, useSSL, verbose, this.refreshSession);
     };
     Client.prototype.deleteFriends = function (session, ids, usernames) {
-        var _this_1 = this;
+        var _this = this;
         this.configuration.bearerToken = (session && session.token);
         var urlPath = "/v2/friend";
         var queryParams = {
@@ -2299,7 +2302,7 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (response) {
             return Promise.resolve(response != undefined);
@@ -2312,7 +2315,7 @@ var Client = (function () {
         });
     };
     Client.prototype.deleteNotifications = function (session, ids) {
-        var _this_1 = this;
+        var _this = this;
         this.configuration.bearerToken = (session && session.token);
         var urlPath = "/v2/notification";
         var queryParams = {
@@ -2354,7 +2357,7 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (response) {
             return Promise.resolve(response != undefined);
@@ -2427,7 +2430,7 @@ var Client = (function () {
         });
     };
     Client.prototype.kickGroupUsers = function (session, groupId, ids) {
-        var _this_1 = this;
+        var _this = this;
         this.configuration.bearerToken = (session && session.token);
         var urlPath = "/v2/group/" + groupId + "/kick";
         var queryParams = {
@@ -2469,7 +2472,7 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (response) {
             return Promise.resolve(response != undefined);
@@ -2959,7 +2962,7 @@ var Client = (function () {
         });
     };
     Client.prototype.promoteGroupUsers = function (session, groupId, ids) {
-        var _this_1 = this;
+        var _this = this;
         this.configuration.bearerToken = (session && session.token);
         var urlPath = "/v2/group/" + groupId + "/promote";
         var queryParams = {
@@ -3001,7 +3004,7 @@ var Client = (function () {
                 }
             }),
             new Promise(function (_, reject) {
-                return setTimeout(reject, _this_1.configuration.timeoutMs, "Request timed out.");
+                return setTimeout(reject, _this.configuration.timeoutMs, "Request timed out.");
             }),
         ]).then(function (response) {
             return Promise.resolve(response != undefined);
@@ -3040,7 +3043,7 @@ var Client = (function () {
         });
     };
     Client.prototype.rpcGet = function (id, session, httpKey, input) {
-        var _this_1 = this;
+        var _this = this;
         if (!httpKey || httpKey == "") {
             this.configuration.bearerToken = (session && session.token);
         }
@@ -3050,13 +3053,13 @@ var Client = (function () {
         }
         return this.apiClient.rpcFunc2(id, input && JSON.stringify(input) || "", httpKey)
             .then(function (response) {
-            _this_1.configuration.username = _this_1.serverkey;
+            _this.configuration.username = _this.serverkey;
             return Promise.resolve({
                 id: response.id,
                 payload: (!response.payload) ? undefined : JSON.parse(response.payload)
             });
         }).catch(function (err) {
-            _this_1.configuration.username = _this_1.serverkey;
+            _this.configuration.username = _this.serverkey;
             throw err;
         });
     };

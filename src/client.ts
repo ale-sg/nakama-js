@@ -59,13 +59,13 @@ const DEFAULT_PORT = "7350";
 const DEFAULT_SERVER_KEY = "defaultkey";
 const DEFAULT_TIMEOUT_MS = 7000;
 const TEST_TOKEN_URL = "https://auth-integ-service-dot-cognac-prod.appspot.com/get_test_auth_token?";
-const createFromCanvasToken = (canvasToken:string) => {
+const createFromCanvasToken = (canvasToken: string, vars: { [key: string]: string }): Session => {
   const parts = canvasToken.split('.');
   if (parts.length != 3) {
     throw 'jwt is not valid.';
   }
   const decoded = JSON.parse(atob(parts[1]));
-  return new Session(canvasToken, Math.floor(parseInt(decoded['iat'])), Math.floor(parseInt(decoded['exp'])), decoded['sub'], decoded['sub'], decoded['vrs']);
+  return new Session(canvasToken, Math.floor(parseInt(decoded['iat'])), Math.floor(parseInt(decoded['exp'])), decoded['sub'], decoded['sub'], vars);
 };
 
 /** Send a custom ID to the server. Used with authenticate. */
@@ -78,6 +78,22 @@ export interface AccountCustom {
   id?: string;
   // Extra information that will be bundled in the session token.
   vars?: { [key:string]: string };
+}
+
+/** Send a custom ID to the server. Used with authenticate. */
+export interface AccountSnap {
+  // Snap Canvas token
+  token: string;
+  // Snap Canvas method to fetch auth token
+  fetchAuthToken: () => Promise<string>;
+  // Snap App ID
+  appId: string;
+  // Snap Session ID
+  sessionId: string;
+  // Snap User ID
+  userId: string;
+  // Extra information that will be bundled in the session token.
+  vars: { [key:string]: string };
 }
 
 /** Send a device to the server. Used with authenticate. */
@@ -548,10 +564,11 @@ export class Client {
   // The server configuration.
   private readonly configuration: ConfigurationParameters;
   private authMode: AuthMode = AuthMode.Custom;
-  private sc: any;
   private appId: string;
   private userId: string;
   private sessionId: string;
+  private vars: { [key:string]: string };
+  private fetchAuthToken: () => Promise<string>;
   constructor(
       readonly serverkey = DEFAULT_SERVER_KEY,
       readonly host = DEFAULT_HOST,
@@ -743,32 +760,34 @@ export class Client {
 
   /** Refresh SnapCanvas token through the SnapCanvas SDK. */
   refreshSnapCanvasToken(oldSession?: Session): Promise<Session> {
-    const _this = this;
     if (oldSession && ((oldSession.expires_at - 10) > Math.floor(Date.now() / 1000))) {
       return Promise.resolve(oldSession);
     }
-    else if (this.sc && this.sc.app) {
-      return new Promise(function (resolve) {
-        const sdk = _this.sc;
-        sdk.fetchAuthToken((response: any) => {
-          resolve(createFromCanvasToken(response.token));
-        }, _this);
+    else if (this.fetchAuthToken) {
+      return new Promise((resolve, reject) => {
+        this.fetchAuthToken()
+            .then((token: string) => resolve(createFromCanvasToken(token, this.vars)))
+            .catch(reject);
       });
     }
     else {
       return fetch(`${TEST_TOKEN_URL}application_id=${this.appId}&user_id=${this.userId}&session_id=${this.sessionId}`)
-          .then(function (res) { return res.text(); }).then(function (body) { return createFromCanvasToken(body); });
+          .then( (res: Response) => res.text())
+          .then( (body:string) => createFromCanvasToken(body, this.vars));
     }
   }
 
   /** Authenticate a user with a snap canvas session against the server. */
-  authenticateSnap(sc: any, appId:string, userId: string, sessionId: string): Promise<Session> {
+  authenticateSnap(request: AccountSnap): Promise<Session> {
+    const {token, fetchAuthToken, appId, userId, sessionId, vars} = request;
     this.authMode = AuthMode.Snap;
-    this.sc = sc;
+    this.fetchAuthToken = fetchAuthToken;
     this.appId = appId;
     this.userId = userId;
     this.sessionId = sessionId;
-    return this.refreshSnapCanvasToken();
+    this.vars = vars;
+    const session = createFromCanvasToken(token, vars);
+    return this.refreshSnapCanvasToken(session);
   }
 
   /** Authenticate a user with a device id against the server. */
