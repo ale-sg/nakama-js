@@ -2364,9 +2364,12 @@ var Client = (function () {
         });
     };
     Client.prototype.deleteStorageObjects = function (session, request) {
-        this.configuration.bearerToken = (session && session.token);
-        return this.apiClient.deleteStorageObjects(request).then(function (response) {
-            return Promise.resolve(response != undefined);
+        var _this = this;
+        return this.refreshSession(session).then(function (newSession) {
+            _this.configuration.bearerToken = (newSession && newSession.token);
+            return _this.apiClient.deleteStorageObjects(request).then(function (response) {
+                return Promise.resolve(response != undefined);
+            });
         });
     };
     Client.prototype.emitEvent = function (session, request) {
@@ -2783,8 +2786,11 @@ var Client = (function () {
         });
     };
     Client.prototype.listMatches = function (session, limit, authoritative, label, minSize, maxSize, query) {
-        this.configuration.bearerToken = (session && session.token);
-        return this.apiClient.listMatches(limit, authoritative, label, minSize, maxSize, query);
+        var _this = this;
+        return this.refreshSession(session).then(function (newSession) {
+            _this.configuration.bearerToken = (newSession && newSession.token);
+            return _this.apiClient.listMatches(limit, authoritative, label, minSize, maxSize, query);
+        });
     };
     Client.prototype.listNotifications = function (session, limit, cacheableCursor) {
         this.configuration.bearerToken = (session && session.token);
@@ -2811,29 +2817,32 @@ var Client = (function () {
         });
     };
     Client.prototype.listStorageObjects = function (session, collection, userId, limit, cursor) {
-        this.configuration.bearerToken = (session && session.token);
-        return this.apiClient.listStorageObjects(collection, userId, limit, cursor).then(function (response) {
-            var result = {
-                objects: [],
-                cursor: response.cursor
-            };
-            if (response.objects == null) {
-                return Promise.resolve(result);
-            }
-            response.objects.forEach(function (o) {
-                result.objects.push({
-                    collection: o.collection,
-                    key: o.key,
-                    permission_read: o.permission_read ? Number(o.permission_read) : 0,
-                    permission_write: o.permission_write ? Number(o.permission_write) : 0,
-                    value: o.value ? JSON.parse(o.value) : undefined,
-                    version: o.version,
-                    user_id: o.user_id,
-                    create_time: o.create_time,
-                    update_time: o.update_time
+        var _this = this;
+        return this.refreshSession(session).then(function (newSession) {
+            _this.configuration.bearerToken = (newSession && newSession.token);
+            return _this.apiClient.listStorageObjects(collection, userId, limit, cursor).then(function (response) {
+                var result = {
+                    objects: [],
+                    cursor: response.cursor
+                };
+                if (response.objects == null) {
+                    return Promise.resolve(result);
+                }
+                response.objects.forEach(function (o) {
+                    result.objects.push({
+                        collection: o.collection,
+                        key: o.key,
+                        permission_read: o.permission_read ? Number(o.permission_read) : 0,
+                        permission_write: o.permission_write ? Number(o.permission_write) : 0,
+                        value: o.value ? JSON.parse(o.value) : undefined,
+                        version: o.version,
+                        user_id: o.user_id,
+                        create_time: o.create_time,
+                        update_time: o.update_time
+                    });
                 });
+                return Promise.resolve(result);
             });
-            return Promise.resolve(result);
         });
     };
     Client.prototype.listTournaments = function (session, categoryStart, categoryEnd, startTime, endTime, limit, cursor) {
@@ -3011,56 +3020,64 @@ var Client = (function () {
         });
     };
     Client.prototype.readStorageObjects = function (session, request) {
-        this.configuration.bearerToken = (session && session.token);
-        return this.apiClient.readStorageObjects(request).then(function (response) {
-            var result = { objects: [] };
-            if (response.objects == null) {
-                return Promise.resolve(result);
-            }
-            response.objects.forEach(function (o) {
-                result.objects.push({
-                    collection: o.collection,
-                    key: o.key,
-                    permission_read: o.permission_read ? Number(o.permission_read) : 0,
-                    permission_write: o.permission_write ? Number(o.permission_write) : 0,
-                    value: o.value ? JSON.parse(o.value) : undefined,
-                    version: o.version,
-                    user_id: o.user_id,
-                    create_time: o.create_time,
-                    update_time: o.update_time
+        var _this = this;
+        return this.refreshSession(session).then(function (newSession) {
+            _this.configuration.bearerToken = (newSession && newSession.token);
+            return _this.apiClient.readStorageObjects(request).then(function (response) {
+                var result = { objects: [] };
+                if (response.objects == null) {
+                    return Promise.resolve(result);
+                }
+                response.objects.forEach(function (o) {
+                    result.objects.push({
+                        collection: o.collection,
+                        key: o.key,
+                        permission_read: o.permission_read ? Number(o.permission_read) : 0,
+                        permission_write: o.permission_write ? Number(o.permission_write) : 0,
+                        value: o.value ? JSON.parse(o.value) : undefined,
+                        version: o.version,
+                        user_id: o.user_id,
+                        create_time: o.create_time,
+                        update_time: o.update_time
+                    });
                 });
+                return Promise.resolve(result);
             });
-            return Promise.resolve(result);
         });
     };
     Client.prototype.rpc = function (session, id, input) {
-        this.configuration.bearerToken = (session && session.token);
-        return this.apiClient.rpcFunc(id, JSON.stringify(input)).then(function (response) {
-            return Promise.resolve({
-                id: response.id,
-                payload: (!response.payload) ? undefined : JSON.parse(response.payload)
+        var _this = this;
+        return this.refreshSession(session).then(function (newSession) {
+            _this.configuration.bearerToken = (newSession && newSession.token);
+            return _this.apiClient.rpcFunc(id, JSON.stringify(input)).then(function (response) {
+                return Promise.resolve({
+                    id: response.id,
+                    payload: (!response.payload) ? undefined : JSON.parse(response.payload)
+                });
             });
         });
     };
     Client.prototype.rpcGet = function (id, session, httpKey, input) {
         var _this = this;
-        if (!httpKey || httpKey == "") {
-            this.configuration.bearerToken = (session && session.token);
-        }
-        else {
-            this.configuration.username = undefined;
-            this.configuration.bearerToken = undefined;
-        }
-        return this.apiClient.rpcFunc2(id, input && JSON.stringify(input) || "", httpKey)
-            .then(function (response) {
-            _this.configuration.username = _this.serverkey;
-            return Promise.resolve({
-                id: response.id,
-                payload: (!response.payload) ? undefined : JSON.parse(response.payload)
+        return this.refreshSession(session).then(function (newSession) {
+            if (!httpKey || httpKey == "") {
+                _this.configuration.bearerToken = (newSession && newSession.token);
+            }
+            else {
+                _this.configuration.username = undefined;
+                _this.configuration.bearerToken = undefined;
+            }
+            return _this.apiClient.rpcFunc2(id, input && JSON.stringify(input) || "", httpKey)
+                .then(function (response) {
+                _this.configuration.username = _this.serverkey;
+                return Promise.resolve({
+                    id: response.id,
+                    payload: (!response.payload) ? undefined : JSON.parse(response.payload)
+                });
+            }).catch(function (err) {
+                _this.configuration.username = _this.serverkey;
+                throw err;
             });
-        }).catch(function (err) {
-            _this.configuration.username = _this.serverkey;
-            throw err;
         });
     };
     Client.prototype.unlinkCustom = function (session, request) {
@@ -3140,19 +3157,22 @@ var Client = (function () {
         });
     };
     Client.prototype.writeStorageObjects = function (session, objects) {
-        this.configuration.bearerToken = (session && session.token);
-        var request = { objects: [] };
-        objects.forEach(function (o) {
-            request.objects.push({
-                collection: o.collection,
-                key: o.key,
-                permission_read: o.permission_read,
-                permission_write: o.permission_write,
-                value: JSON.stringify(o.value),
-                version: o.version
+        var _this = this;
+        return this.refreshSession(session).then(function (newSession) {
+            _this.configuration.bearerToken = (newSession && newSession.token);
+            var request = { objects: [] };
+            objects.forEach(function (o) {
+                request.objects.push({
+                    collection: o.collection,
+                    key: o.key,
+                    permission_read: o.permission_read,
+                    permission_write: o.permission_write,
+                    value: JSON.stringify(o.value),
+                    version: o.version
+                });
             });
+            return _this.apiClient.writeStorageObjects(request);
         });
-        return this.apiClient.writeStorageObjects(request);
     };
     Client.prototype.writeTournamentRecord = function (session, tournamentId, request) {
         this.configuration.bearerToken = (session && session.token);

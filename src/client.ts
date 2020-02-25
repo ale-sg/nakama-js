@@ -1317,9 +1317,11 @@ export class Client {
 
   /** Delete one or more storage objects */
   deleteStorageObjects(session: Session, request: ApiDeleteStorageObjectsRequest): Promise<boolean> {
-    this.configuration.bearerToken = (session && session.token);
-    return this.apiClient.deleteStorageObjects(request).then((response: any) => {
-      return Promise.resolve(response != undefined);
+    return this.refreshSession(session).then((newSession: Session) => {
+      this.configuration.bearerToken = (newSession && newSession.token);
+      return this.apiClient.deleteStorageObjects(request).then((response: any) => {
+        return Promise.resolve(response != undefined);
+      });
     });
   }
 
@@ -1349,7 +1351,7 @@ export class Client {
   getUsers(session: Session, ids?: Array<string>, usernames?: Array<string>, facebookIds?: Array<string>): Promise<Users> {
     this.configuration.bearerToken = (session && session.token);
     return this.apiClient.getUsers(ids, usernames, facebookIds).then((response: ApiUsers) => {
-      var result: Users = {
+      const result: Users = {
         users: []
       };
 
@@ -1461,7 +1463,7 @@ export class Client {
   listChannelMessages(session: Session, channelId: string, limit?: number, forward?: boolean, cursor?: string): Promise<ChannelMessageList> {
     this.configuration.bearerToken = (session && session.token);
     return this.apiClient.listChannelMessages(channelId, limit, forward, cursor).then((response: ApiChannelMessageList) => {
-      var result: ChannelMessageList = {
+      const result: ChannelMessageList = {
         messages: [],
         next_cursor: response.next_cursor,
         prev_cursor: response.prev_cursor
@@ -1496,7 +1498,7 @@ export class Client {
   listGroupUsers(session: Session, groupId: string, state?: number, limit?: number, cursor?: string): Promise<GroupUserList> {
     this.configuration.bearerToken = (session && session.token);
     return this.apiClient.listGroupUsers(groupId, limit, state, cursor).then((response: ApiGroupUserList) => {
-      var result: GroupUserList = {
+      const result: GroupUserList = {
         group_users: [],
         cursor: response.cursor
       };
@@ -1536,7 +1538,7 @@ export class Client {
   listUserGroups(session: Session, userId: string, state?: number, limit?: number, cursor?: string,): Promise<UserGroupList> {
     this.configuration.bearerToken = (session && session.token);
     return this.apiClient.listUserGroups(userId, state, limit, cursor).then((response: ApiUserGroupList) => {
-      var result: UserGroupList = {
+      const result: UserGroupList = {
         user_groups: [],
         cursor: response.cursor,
       };
@@ -1572,7 +1574,7 @@ export class Client {
   listGroups(session: Session, name?: string, cursor?: string, limit?: number): Promise<GroupList> {
     this.configuration.bearerToken = (session && session.token);
     return this.apiClient.listGroups(name, cursor, limit).then((response: ApiGroupList) => {
-      var result: GroupList = {
+      const result: GroupList = {
         groups: []
       };
 
@@ -1661,7 +1663,7 @@ export class Client {
   listFriends(session: Session, state?: number, limit?: number, cursor?: string): Promise<Friends> {
     this.configuration.bearerToken = (session && session.token);
     return this.apiClient.listFriends(limit, state, cursor).then((response: ApiFriendList) => {
-      var result: Friends = {
+      const result: Friends = {
         friends: [],
         cursor: response.cursor
       };
@@ -1701,7 +1703,7 @@ export class Client {
   listLeaderboardRecords(session: Session, leaderboardId: string, ownerIds?: Array<string>, limit?: number, cursor?: string, expiry?: string,): Promise<LeaderboardRecordList> {
     this.configuration.bearerToken = (session && session.token);
     return this.apiClient.listLeaderboardRecords(leaderboardId, ownerIds, limit, cursor, expiry).then((response: ApiLeaderboardRecordList) => {
-      var list: LeaderboardRecordList = {
+      const list: LeaderboardRecordList = {
         next_cursor: response.next_cursor,
         prev_cursor: response.prev_cursor,
         owner_records: [],
@@ -1751,7 +1753,7 @@ export class Client {
   listLeaderboardRecordsAroundOwner(session: Session, leaderboardId: string, ownerId: string, limit?: number, expiry?: string): Promise<LeaderboardRecordList> {
     this.configuration.bearerToken = (session && session.token);
     return this.apiClient.listLeaderboardRecordsAroundOwner(leaderboardId, ownerId, limit, expiry).then((response: ApiLeaderboardRecordList) => {
-      var list: LeaderboardRecordList = {
+      const list: LeaderboardRecordList = {
         next_cursor: response.next_cursor,
         prev_cursor: response.prev_cursor,
         owner_records: [],
@@ -1800,15 +1802,17 @@ export class Client {
 
   /** Fetch list of running matches. */
   listMatches(session: Session, limit?: number, authoritative?: boolean, label?: string, minSize?: number, maxSize?: number, query?: string): Promise<ApiMatchList> {
-    this.configuration.bearerToken = (session && session.token);
-    return this.apiClient.listMatches(limit, authoritative, label, minSize, maxSize, query);
+    return this.refreshSession(session).then((newSession: Session) => {
+      this.configuration.bearerToken = (newSession && newSession.token);
+      return this.apiClient.listMatches(limit, authoritative, label, minSize, maxSize, query);
+    });
   }
 
   /** Fetch list of notifications. */
   listNotifications(session: Session, limit?: number, cacheableCursor?: string): Promise<NotificationList> {
     this.configuration.bearerToken = (session && session.token);
     return this.apiClient.listNotifications(limit, cacheableCursor).then((response: ApiNotificationList) => {
-      var result: NotificationList = {
+      const result: NotificationList = {
         cacheable_cursor: response.cacheable_cursor,
         notifications: [],
       };
@@ -1834,31 +1838,33 @@ export class Client {
 
   /** List storage objects. */
   listStorageObjects(session: Session, collection: string, userId?: string, limit?: number, cursor?: string): Promise<StorageObjectList> {
-    this.configuration.bearerToken = (session && session.token);
-    return this.apiClient.listStorageObjects(collection, userId, limit, cursor).then((response: ApiStorageObjectList) => {
-      var result: StorageObjectList = {
-        objects: [],
-        cursor: response.cursor
-      };
+    return this.refreshSession(session).then((newSession: Session) => {
+      this.configuration.bearerToken = (newSession && newSession.token);
+      return this.apiClient.listStorageObjects(collection, userId, limit, cursor).then((response: ApiStorageObjectList) => {
+        const result: StorageObjectList = {
+          objects: [],
+          cursor: response.cursor
+        };
 
-      if (response.objects == null) {
+        if (response.objects == null) {
+          return Promise.resolve(result);
+        }
+
+        response.objects!.forEach(o => {
+          result.objects.push({
+            collection: o.collection,
+            key: o.key,
+            permission_read: o.permission_read ? Number(o.permission_read) : 0,
+            permission_write: o.permission_write ? Number(o.permission_write) : 0,
+            value: o.value ? JSON.parse(o.value) : undefined,
+            version: o.version,
+            user_id: o.user_id,
+            create_time: o.create_time,
+            update_time: o.update_time
+          })
+        });
         return Promise.resolve(result);
-      }
-
-      response.objects!.forEach(o => {
-        result.objects.push({
-          collection: o.collection,
-          key: o.key,
-          permission_read: o.permission_read ? Number(o.permission_read) : 0,
-          permission_write: o.permission_write ? Number(o.permission_write) : 0,
-          value: o.value ? JSON.parse(o.value) : undefined,
-          version: o.version,
-          user_id: o.user_id,
-          create_time: o.create_time,
-          update_time: o.update_time
-        })
       });
-      return Promise.resolve(result);
     });
   }
 
@@ -1866,7 +1872,7 @@ export class Client {
   listTournaments(session: Session, categoryStart?: number, categoryEnd?: number, startTime?: number, endTime?: number, limit?: number, cursor?: string): Promise<TournamentList> {
     this.configuration.bearerToken = (session && session.token);
     return this.apiClient.listTournaments(categoryStart, categoryEnd, startTime, endTime, limit, cursor).then((response: ApiTournamentList) => {
-      var list: TournamentList = {
+      const list: TournamentList = {
         cursor: response.cursor,
         tournaments: [],
       };
@@ -1903,7 +1909,7 @@ export class Client {
   listTournamentRecords(session: Session, tournamentId: string, ownerIds?: Array<string>, limit?: number, cursor?: string, expiry?: string): Promise<TournamentRecordList> {
     this.configuration.bearerToken = (session && session.token);
     return this.apiClient.listTournamentRecords(tournamentId, ownerIds, limit, cursor, expiry).then((response: ApiTournamentRecordList) => {
-      var list: TournamentRecordList = {
+      const list: TournamentRecordList = {
         next_cursor: response.next_cursor,
         prev_cursor: response.prev_cursor,
         owner_records: [],
@@ -1954,7 +1960,7 @@ export class Client {
   listTournamentRecordsAroundOwner(session: Session, tournamentId: string, ownerId: string, limit?: number, expiry?: string): Promise<TournamentRecordList> {
     this.configuration.bearerToken = (session && session.token);
     return this.apiClient.listTournamentRecordsAroundOwner(tournamentId, ownerId, limit, expiry).then((response: ApiTournamentRecordList) => {
-      var list: TournamentRecordList = {
+      const list: TournamentRecordList = {
         next_cursor: response.next_cursor,
         prev_cursor: response.prev_cursor,
         owner_records: [],
@@ -2056,62 +2062,68 @@ export class Client {
 
   /** Fetch storage objects. */
   readStorageObjects(session: Session, request: ApiReadStorageObjectsRequest): Promise<StorageObjects> {
-    this.configuration.bearerToken = (session && session.token);
-    return this.apiClient.readStorageObjects(request).then((response: ApiStorageObjects) => {
-      var result: StorageObjects = {objects: []};
+    return this.refreshSession(session).then((newSession: Session) => {
+      this.configuration.bearerToken = (newSession && newSession.token);
+      return this.apiClient.readStorageObjects(request).then((response: ApiStorageObjects) => {
+        const result: StorageObjects = {objects: []};
 
-      if (response.objects == null) {
+        if (response.objects == null) {
+          return Promise.resolve(result);
+        }
+
+        response.objects!.forEach(o => {
+          result.objects.push({
+            collection: o.collection,
+            key: o.key,
+            permission_read: o.permission_read ? Number(o.permission_read) : 0,
+            permission_write: o.permission_write ? Number(o.permission_write) : 0,
+            value: o.value ? JSON.parse(o.value) : undefined,
+            version: o.version,
+            user_id: o.user_id,
+            create_time: o.create_time,
+            update_time: o.update_time
+          })
+        });
         return Promise.resolve(result);
-      }
-
-      response.objects!.forEach(o => {
-        result.objects.push({
-          collection: o.collection,
-          key: o.key,
-          permission_read: o.permission_read ? Number(o.permission_read) : 0,
-          permission_write: o.permission_write ? Number(o.permission_write) : 0,
-          value: o.value ? JSON.parse(o.value) : undefined,
-          version: o.version,
-          user_id: o.user_id,
-          create_time: o.create_time,
-          update_time: o.update_time
-        })
       });
-      return Promise.resolve(result);
     });
   }
 
   /** Execute a Lua function on the server. */
   rpc(session: Session, id: string, input: object): Promise<RpcResponse> {
-    this.configuration.bearerToken = (session && session.token);
-    return this.apiClient.rpcFunc(id, JSON.stringify(input)).then((response: ApiRpc) => {
-      return Promise.resolve({
-        id: response.id,
-        payload: (!response.payload) ? undefined : JSON.parse(response.payload)
-      });
+    return this.refreshSession(session).then((newSession: Session) => {
+      this.configuration.bearerToken = (newSession && newSession.token);
+        return this.apiClient.rpcFunc(id, JSON.stringify(input)).then((response: ApiRpc) => {
+          return Promise.resolve({
+            id: response.id,
+            payload: (!response.payload) ? undefined : JSON.parse(response.payload)
+          });
+        });
     });
   }
 
   /** Execute a Lua function on the server. */
-  rpcGet(id: string, session?: Session, httpKey?: string, input?: object): Promise<RpcResponse> {
-    if (!httpKey || httpKey == "") {
-      this.configuration.bearerToken = (session && session.token);
-    } else {
-      // When a HTTP key is used we should not use basicauth or bearer auth.
-      this.configuration.username = undefined;
-      this.configuration.bearerToken = undefined;
-    }
-    return this.apiClient.rpcFunc2(id, input && JSON.stringify(input) || "", httpKey)
-      .then((response: ApiRpc) => {
-        this.configuration.username = this.serverkey;
-        return Promise.resolve({
-          id: response.id,
-          payload: (!response.payload) ? undefined : JSON.parse(response.payload)
+  rpcGet(id: string, session: Session, httpKey?: string, input?: object): Promise<RpcResponse> {
+    return this.refreshSession(session).then((newSession: Session) => {
+      if (!httpKey || httpKey == "") {
+        this.configuration.bearerToken = (newSession && newSession.token);
+      } else {
+        // When a HTTP key is used we should not use basicauth or bearer auth.
+        this.configuration.username = undefined;
+        this.configuration.bearerToken = undefined;
+      }
+      return this.apiClient.rpcFunc2(id, input && JSON.stringify(input) || "", httpKey)
+        .then((response: ApiRpc) => {
+          this.configuration.username = this.serverkey;
+          return Promise.resolve({
+            id: response.id,
+            payload: (!response.payload) ? undefined : JSON.parse(response.payload)
+          });
+        }).catch((err: any) => {
+          this.configuration.username = this.serverkey;
+          throw err;
         });
-      }).catch((err: any) => {
-        this.configuration.username = this.serverkey;
-        throw err;
-      });
+    });
   }
 
   /** Remove custom ID from the social profiles on the current user's account. */
@@ -2212,21 +2224,22 @@ export class Client {
 
   /** Write storage objects. */
   writeStorageObjects(session: Session, objects: Array<WriteStorageObject>): Promise<ApiStorageObjectAcks> {
-    this.configuration.bearerToken = (session && session.token);
+    return this.refreshSession(session).then((newSession: Session) => {
+      this.configuration.bearerToken = (newSession && newSession.token);
 
-    var request: ApiWriteStorageObjectsRequest = {objects: []};
-    objects.forEach(o => {
-      request.objects!.push({
-        collection: o.collection,
-        key: o.key,
-        permission_read: o.permission_read,
-        permission_write: o.permission_write,
-        value: JSON.stringify(o.value),
-        version: o.version
-      })
-    })
-
-    return this.apiClient.writeStorageObjects(request);
+      const request: ApiWriteStorageObjectsRequest = {objects: []};
+      objects.forEach(o => {
+        request.objects!.push({
+          collection: o.collection,
+          key: o.key,
+          permission_read: o.permission_read,
+          permission_write: o.permission_write,
+          value: JSON.stringify(o.value),
+          version: o.version
+        })
+      });
+      return this.apiClient.writeStorageObjects(request);
+    });
   }
 
   /** Write a record to a tournament. */

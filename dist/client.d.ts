@@ -328,7 +328,7 @@ export declare class Client {
     promoteGroupUsers(session: Session, groupId: string, ids?: Array<string>): Promise<boolean>;
     readStorageObjects(session: Session, request: ApiReadStorageObjectsRequest): Promise<StorageObjects>;
     rpc(session: Session, id: string, input: object): Promise<RpcResponse>;
-    rpcGet(id: string, session?: Session, httpKey?: string, input?: object): Promise<RpcResponse>;
+    rpcGet(id: string, session: Session, httpKey?: string, input?: object): Promise<RpcResponse>;
     unlinkCustom(session: Session, request: ApiAccountCustom): Promise<boolean>;
     unlinkDevice(session: Session, request: ApiAccountDevice): Promise<boolean>;
     unlinkEmail(session: Session, request: ApiAccountEmail): Promise<boolean>;
